@@ -644,17 +644,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: `Invalid network ${selectedNetwork} for ${cryptocurrency}` });
       }
 
-      // Check investor limit and enforce regular pricing after 10 spots filled
+      // Check investor limit
       const investorCount = await db.select({ count: count() })
         .from(investors)
         .where(eq(investors.postId, post.id))
         .then(result => result[0]?.count ?? 0);
 
+      // Prevent buyout if 10 spots filled, but allow regular unlock
       if (isBuyout && investorCount >= 10) {
         return res.status(400).json({ 
-          error: 'All 10 investor spots are filled. Please unlock at regular price instead.' 
+          error: 'All 10 investor spots are filled. You can unlock at regular price.' 
         });
       }
+
+      // Calculate actual payment amount - force regular price if investor spots full
+      const actualPrice = (isBuyout && investorCount < 10 && post.buyoutPrice) 
+        ? post.buyoutPrice 
+        : post.price;
 
       // Create payment record
       await storage.createPayment({
@@ -674,10 +680,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(investors.postId, post.id))
         .orderBy(investors.position);
 
-      console.log(`Post ${post.id} - Payment received, Existing investors: ${existingInvestors.length}, isBuyout: ${isBuyout}`);
+      // Get total payment count for this post to track which payment this is
+      const totalPayments = await db.select({ count: count() })
+        .from(payments)
+        .where(and(
+          eq(payments.postId, post.id),
+          eq(payments.paymentType, 'content')
+        ))
+        .then(result => result[0]?.count ?? 0);
+
+      const paymentNumber = totalPayments + 1; // This payment's number
+
+      console.log(`Post ${post.id} - Payment #${paymentNumber}, Existing investors: ${existingInvestors.length}, isBuyout: ${isBuyout}`);
 
       if (isBuyout && existingInvestors.length < 10) {
-        // User becomes an investor (first 10 buyers who select buyout option)
+        // User becomes an investor (first 10 buyers who choose buyout)
         const position = existingInvestors.length + 1;
         await db.insert(investors).values({
           postId: post.id,
@@ -688,10 +705,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
         console.log(`User ${user.id} became investor #${position} for post ${post.id}`);
-      } else if (!isBuyout && existingInvestors.length === 10) {
-        // This is a regular purchase after the first 10 investors - distribute earnings
+      } else if (paymentNumber > 10 && existingInvestors.length === 10) {
+        // This is payment #11 or later - distribute $0.05 to all 10 investors
         const earningsPerInvestor = 0.05;
-        console.log(`Regular unlock - Distributing $${earningsPerInvestor} to ${existingInvestors.length} investors`);
+        console.log(`Payment #${paymentNumber} - Distributing $${earningsPerInvestor} to 10 investors`);
         
         for (const investor of existingInvestors) {
           const currentEarnings = parseFloat(investor.totalEarnings || '0');

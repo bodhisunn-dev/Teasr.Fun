@@ -53,10 +53,12 @@ export function PaymentModal({ isOpen, onClose, post, onSuccess, paymentType = '
   };
 
   // Use comment fee if unlocking comments, otherwise use post price
-  // Force regular price if buyout spots are full
+  // Force regular price if buyout spots are full OR if not selecting buyout
   const basePrice = isCommentUnlock ? (post.commentFee || '0') : post.price;
+  const buyoutPrice = (post.buyoutPrice && !isBuyoutFull && isBuyout) ? post.buyoutPrice : null;
+  
   const convertedPrice = getConvertedPrice(basePrice);
-  const convertedBuyoutPrice = (post.buyoutPrice && !isBuyoutFull) ? getConvertedPrice(post.buyoutPrice) : null;
+  const convertedBuyoutPrice = buyoutPrice ? getConvertedPrice(buyoutPrice) : null;
 
   const handlePayment = async () => {
     setIsProcessing(true);
@@ -374,13 +376,13 @@ export function PaymentModal({ isOpen, onClose, post, onSuccess, paymentType = '
                     <RefreshCw className="w-3 h-3 text-muted-foreground" />
                   )}
                   <Badge className="bg-primary text-primary-foreground text-lg px-4 py-1 font-bold" data-testid="badge-payment-price">
-                    {`${((!isCommentUnlock && isBuyout && convertedBuyoutPrice && !isBuyoutFull) ? convertedBuyoutPrice : convertedPrice).toFixed(selectedCrypto === 'USDC' ? 2 : 6)} ${selectedCrypto}`}
+                    {`${(convertedBuyoutPrice || convertedPrice).toFixed(selectedCrypto === 'USDC' ? 2 : 6)} ${selectedCrypto}`}
                   </Badge>
                 </div>
               </div>
               {selectedCrypto !== 'USDC' && (
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>≈ ${isCommentUnlock ? (post.commentFee || '0') : (isBuyout && post.buyoutPrice && !isBuyoutFull ? post.buyoutPrice : post.price)} USD</span>
+                  <span>≈ ${isCommentUnlock ? (post.commentFee || '0') : (buyoutPrice || post.price)} USD</span>
                   {prices && typeof prices[selectedCrypto as keyof typeof prices] === 'number' && (
                     <span>1 {selectedCrypto} = ${prices[selectedCrypto as keyof typeof prices].toFixed(2)}</span>
                   )}
