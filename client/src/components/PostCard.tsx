@@ -54,7 +54,7 @@ export function PostCard({ post, onVote, onPaymentSuccess }: PostCardProps) {
         console.error('Error fetching buyout count:', error);
       }
     };
-    
+
     if (post.buyoutPrice) {
       fetchBuyoutCount();
     }
@@ -95,7 +95,7 @@ export function PostCard({ post, onVote, onPaymentSuccess }: PostCardProps) {
 
   const isPaid = localPaid || post.hasUserPaid || post.isFree;
 
-  const isBuyoutLimitReached = post.buyoutPrice && investorCount >= 10;
+  const isBuyoutLimitReached = post.buyoutPrice && investorCount >= (post.maxInvestors || 10);
   const canBuyout = post.buyoutPrice && !isBuyoutLimitReached && !post.hasUserPaid;
 
   // Add wallet address to media URL for authentication
@@ -311,8 +311,10 @@ export function PostCard({ post, onVote, onPaymentSuccess }: PostCardProps) {
                 <span className="sm:hidden">{(post.commentCount || 0) > 999 ? `${((post.commentCount || 0) / 1000).toFixed(1)}k` : (post.commentCount || 0)}</span>
               </motion.button>
               {!post.isFree && post.buyoutPrice && (
-                <InvestorBadge
-                  investorCount={investorCount}
+                <InvestorBadge 
+                  investorCount={post.investorCount || 0}
+                  maxInvestors={post.maxInvestors || 10}
+                  investorRevenueShare={post.investorRevenueShare || "0"}
                   showProgress={true}
                 />
               )}

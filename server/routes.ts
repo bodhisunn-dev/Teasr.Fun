@@ -738,7 +738,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const revenueAfterPlatformFee = paymentAmount - PLATFORM_FEE_USDC;
         const investorSharePercentage = parseFloat(post.investorRevenueShare || '0') / 100;
         const totalInvestorShare = revenueAfterPlatformFee * investorSharePercentage;
-        const earningsPerInvestor = totalInvestorShare / maxInvestorSlots;
+        const earningsPerInvestor = totalInvestorShare / existingInvestors.length;
         
         console.log(`Payment #${paymentNumber} - Distributing investor revenue:
           Payment: $${paymentAmount}
@@ -746,7 +746,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           After Fee: $${revenueAfterPlatformFee}
           Investor Share %: ${post.investorRevenueShare}%
           Total to Investors: $${totalInvestorShare.toFixed(6)}
-          Per Investor: $${earningsPerInvestor.toFixed(6)}`);
+          Per Investor (${existingInvestors.length} investors): $${earningsPerInvestor.toFixed(6)}`);
         
         for (const investor of existingInvestors) {
           const currentEarnings = parseFloat(investor.totalEarnings || '0');
