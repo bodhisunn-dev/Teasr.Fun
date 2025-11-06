@@ -69,7 +69,7 @@ const pinnedPostIds: string[] = [];
             Investor Revenue Sharing
           </h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Be among the first 10 buyers and earn $0.05 from every future unlock of that content!
+            Become an early investor and earn revenue share from every future unlock of that content!
           </p>
         </div>
 
@@ -81,7 +81,7 @@ const pinnedPostIds: string[] = [];
             </div>
             <h3 className="text-xl font-semibold">Early Investor Spots</h3>
             <p className="text-sm text-muted-foreground">
-              Limited to the first 10 buyers per content piece. Visual indicator shows remaining spots in real-time.
+              Creators set the number of investor spots (1-100). Visual indicator shows remaining spots in real-time.
             </p>
           </Card>
 
@@ -91,7 +91,7 @@ const pinnedPostIds: string[] = [];
             </div>
             <h3 className="text-xl font-semibold">Passive Earnings</h3>
             <p className="text-sm text-muted-foreground">
-              Earn $0.05 automatically from each subsequent unlock. Track your earnings dashboard in real-time.
+              Earn a percentage from each subsequent unlock automatically. Track your earnings dashboard in real-time.
             </p>
           </Card>
 
@@ -203,7 +203,7 @@ const pinnedPostIds: string[] = [];
               </div>
               <h4 className="font-semibold">Become an Investor</h4>
               <p className="text-sm text-muted-foreground">
-                Be among the first 10 to unlock and secure your investor position
+                Secure your investor position before all spots are filled
               </p>
             </div>
             
@@ -213,7 +213,7 @@ const pinnedPostIds: string[] = [];
               </div>
               <h4 className="font-semibold">Earn Passively</h4>
               <p className="text-sm text-muted-foreground">
-                Automatically earn $0.05 from every subsequent unlock of that content
+                Automatically earn your share from every subsequent unlock of that content
               </p>
             </div>
           </div>

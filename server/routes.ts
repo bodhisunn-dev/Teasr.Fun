@@ -23,7 +23,7 @@ import { generateAccessToken, verifyAccessToken } from "./services/jwt";
 import cron from "node-cron";
 import { convertFromUSD, formatPrice, getAllPrices } from "./services/priceConversion";
 import { db } from './db';
-import { users, posts, payments, comments, votes, investors } from '@shared/schema';
+import { users, posts, payments, comments, votes, investors, platformFees } from '@shared/schema';
 import { eq, desc, and, sql, count } from 'drizzle-orm';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -302,7 +302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
-      const { title, description, price, isFree, buyoutPrice, acceptedCryptos, commentsLocked, commentFee } = req.body;
+      const { title, description, price, isFree, buyoutPrice, maxInvestors, investorRevenueShare, acceptedCryptos, commentsLocked, commentFee } = req.body;
 
       // Generate content encryption key
       const contentKey = generateContentKey();
@@ -340,6 +340,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         price: isFree === 'true' ? '0' : price,
         isFree: isFree === 'true',
         buyoutPrice: buyoutPrice || null,
+        maxInvestors: maxInvestors ? parseInt(maxInvestors) : 10,
+        investorRevenueShare: investorRevenueShare || '0',
         acceptedCryptos: acceptedCryptos || 'USDC',
         commentsLocked: commentsLocked === 'true',
         commentFee: commentsLocked === 'true' ? commentFee : null,
@@ -644,32 +646,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: `Invalid network ${selectedNetwork} for ${cryptocurrency}` });
       }
 
-      // Check investor limit
+      // Check investor limit (use post's maxInvestors setting)
+      const maxInvestorSlots = post.maxInvestors || 10;
       const investorCount = await db.select({ count: count() })
         .from(investors)
         .where(eq(investors.postId, post.id))
         .then(result => result[0]?.count ?? 0);
 
-      console.log(`Payment attempt - postId: ${post.id}, investorCount: ${investorCount}, isBuyout: ${isBuyout}`);
+      console.log(`Payment attempt - postId: ${post.id}, investorCount: ${investorCount}/${maxInvestorSlots}, isBuyout: ${isBuyout}`);
 
-      // Prevent buyout if 10 spots filled, but allow regular unlock
-      if (isBuyout && investorCount >= 10) {
+      // Prevent buyout if max investor spots filled, but allow regular unlock
+      if (isBuyout && investorCount >= maxInvestorSlots) {
         return res.status(400).json({ 
-          error: 'All 10 investor spots are filled. You can unlock at regular price.' 
+          error: `All ${maxInvestorSlots} investor spots are filled. You can unlock at regular price.` 
         });
       }
 
       // Calculate actual payment amount
       // If buyout is selected AND spots available AND buyoutPrice exists, use buyout price
       // Otherwise use regular price
-      const actualPrice = (isBuyout && investorCount < 10 && post.buyoutPrice) 
+      const actualPrice = (isBuyout && investorCount < maxInvestorSlots && post.buyoutPrice) 
         ? post.buyoutPrice 
         : post.price;
 
-      console.log(`Calculated price: ${actualPrice} (isBuyout: ${isBuyout}, investorCount: ${investorCount})`);
+      console.log(`Calculated price: ${actualPrice} (isBuyout: ${isBuyout}, investorCount: ${investorCount}/${maxInvestorSlots})`);
 
       // Create payment record
-      await storage.createPayment({
+      const paymentRecord = await storage.createPayment({
         userId: user.id,
         postId: post.id,
         amount: amount.toString(),
@@ -679,6 +682,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         transactionHash: transactionHash || `mock_tx_${cryptocurrency}_${Date.now()}`,
         paymentType: 'content',
       });
+
+      // Platform fee configuration (0.05 USDC on all locked content)
+      const PLATFORM_FEE_USDC = 0.05;
+      const PLATFORM_WALLET = '0x47aB5ba5f987A8f75f8Ef2F0D8FF33De1A04a020';
+
+      // Record platform fee (0.05 USDC on every transaction for locked content)
+      if (!post.isFree) {
+        await db.insert(platformFees).values({
+          paymentId: paymentRecord.id,
+          postId: post.id,
+          amount: PLATFORM_FEE_USDC.toString(),
+          cryptocurrency: 'USDC',
+          transactionHash: transactionHash || `platform_fee_${Date.now()}`,
+          platformWallet: PLATFORM_WALLET,
+          status: 'completed',
+        });
+        console.log(`Platform fee recorded: $${PLATFORM_FEE_USDC} for payment ${paymentRecord.id}`);
+      }
 
       // Handle investor position and earnings
       const existingInvestors = await db.select()
@@ -695,12 +716,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ))
         .then(result => result[0]?.count ?? 0);
 
-      const paymentNumber = totalPayments + 1; // This payment's number
+      const paymentNumber = totalPayments; // Already includes this payment
 
-      console.log(`Post ${post.id} - Payment #${paymentNumber}, Existing investors: ${existingInvestors.length}, isBuyout: ${isBuyout}`);
+      console.log(`Post ${post.id} - Payment #${paymentNumber}, Existing investors: ${existingInvestors.length}/${maxInvestorSlots}, isBuyout: ${isBuyout}`);
 
-      if (isBuyout && existingInvestors.length < 10) {
-        // User becomes an investor (first 10 buyers who choose buyout)
+      if (isBuyout && existingInvestors.length < maxInvestorSlots) {
+        // User becomes an investor (buyers who choose buyout up to maxInvestors limit)
         const position = existingInvestors.length + 1;
         await db.insert(investors).values({
           postId: post.id,
@@ -710,15 +731,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           totalEarnings: '0.00',
         });
         
-        console.log(`User ${user.id} became investor #${position} for post ${post.id}`);
-      } else if (paymentNumber > 10 && existingInvestors.length === 10) {
-        // This is payment #11 or later - distribute $0.05 to all 10 investors
-        const earningsPerInvestor = 0.05;
-        console.log(`Payment #${paymentNumber} - Distributing $${earningsPerInvestor} to 10 investors`);
+        console.log(`User ${user.id} became investor #${position}/${maxInvestorSlots} for post ${post.id}`);
+      } else if (paymentNumber > maxInvestorSlots && existingInvestors.length === maxInvestorSlots && parseFloat(post.investorRevenueShare || '0') > 0) {
+        // This is a payment after all investor slots filled - distribute revenue share
+        const paymentAmount = parseFloat(amount);
+        const revenueAfterPlatformFee = paymentAmount - PLATFORM_FEE_USDC;
+        const investorSharePercentage = parseFloat(post.investorRevenueShare || '0') / 100;
+        const totalInvestorShare = revenueAfterPlatformFee * investorSharePercentage;
+        const earningsPerInvestor = totalInvestorShare / existingInvestors.length;
+        
+        console.log(`Payment #${paymentNumber} - Distributing investor revenue:
+          Payment: $${paymentAmount}
+          Platform Fee: $${PLATFORM_FEE_USDC}
+          After Fee: $${revenueAfterPlatformFee}
+          Investor Share %: ${post.investorRevenueShare}%
+          Total to Investors: $${totalInvestorShare.toFixed(6)}
+          Per Investor (${existingInvestors.length} investors): $${earningsPerInvestor.toFixed(6)}`);
         
         for (const investor of existingInvestors) {
           const currentEarnings = parseFloat(investor.totalEarnings || '0');
-          const newEarnings = (currentEarnings + earningsPerInvestor).toFixed(2);
+          const newEarnings = (currentEarnings + earningsPerInvestor).toFixed(6);
           await db.update(investors)
             .set({ totalEarnings: newEarnings })
             .where(eq(investors.id, investor.id));
@@ -817,7 +849,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create payment record for comment access
-      await storage.createPayment({
+      const commentPaymentRecord = await storage.createPayment({
         userId: user.id,
         postId: post.id,
         amount: post.commentFee || '0',
@@ -827,6 +859,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         transactionHash: transactionHash || `mock_tx_comment_${cryptocurrency}_${Date.now()}`,
         paymentType: 'comment',
       });
+
+      // Platform fee for comment unlock (0.05 USDC)
+      const PLATFORM_FEE_USDC = 0.05;
+      const PLATFORM_WALLET = '0x47aB5ba5f987A8f75f8Ef2F0D8FF33De1A04a020';
+      
+      await db.insert(platformFees).values({
+        paymentId: commentPaymentRecord.id,
+        postId: post.id,
+        amount: PLATFORM_FEE_USDC.toString(),
+        cryptocurrency: 'USDC',
+        transactionHash: transactionHash || `platform_fee_comment_${Date.now()}`,
+        platformWallet: PLATFORM_WALLET,
+        status: 'completed',
+      });
+      console.log(`Platform fee recorded for comment unlock: $${PLATFORM_FEE_USDC} for payment ${commentPaymentRecord.id}`);
 
       // Create notification for post creator
       await storage.createNotification({

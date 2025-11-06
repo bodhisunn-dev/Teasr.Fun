@@ -80,7 +80,7 @@ export function InvestorEarnings({
                         </div>
                         <div className="flex items-center gap-1">
                           <Lock className="w-3 h-3" />
-                          $0.05 per unlock
+                          Revenue share
                         </div>
                       </div>
                     </div>
@@ -106,7 +106,7 @@ export function InvestorEarnings({
           </div>
           <h3 className="font-semibold mb-2">No Investments Yet</h3>
           <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-            Be among the first 10 to unlock exclusive content and start earning $0.05 from every future unlock!
+            Become an early investor in exclusive content and start earning revenue share from every future unlock!
           </p>
         </Card>
       )}

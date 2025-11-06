@@ -5,19 +5,22 @@ import { Progress } from "@/components/ui/progress";
 interface InvestorBadgeProps {
   investorCount: number;
   maxInvestors?: number;
+  investorRevenueShare?: string;
   className?: string;
   showProgress?: boolean;
 }
 
 export function InvestorBadge({ 
   investorCount, 
-  maxInvestors = 10, 
+  maxInvestors = 10,
+  investorRevenueShare = "0",
   className = "",
   showProgress = false
 }: InvestorBadgeProps) {
   const spotsRemaining = maxInvestors - investorCount;
   const isFull = investorCount >= maxInvestors;
   const progressPercent = (investorCount / maxInvestors) * 100;
+  const revenueSharePercent = parseFloat(investorRevenueShare);
 
   return (
     <div className={`space-y-2 ${className}`} data-testid="investor-badge">
@@ -47,11 +50,11 @@ export function InvestorBadge({
             value={progressPercent} 
             className="h-1.5"
           />
-          {!isFull && (
+          {!isFull && revenueSharePercent > 0 && (
             <div className="flex items-start gap-2 p-2 bg-purple-500/10 border-l-2 border-purple-500 rounded">
               <DollarSign className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
               <p className="text-xs text-muted-foreground leading-relaxed">
-                <span className="font-semibold text-foreground">Early investor bonus:</span> Earn $0.05 from every future unlock!
+                <span className="font-semibold text-foreground">Early investor bonus:</span> Earn {revenueSharePercent}% from every future unlock!
               </p>
             </div>
           )}
