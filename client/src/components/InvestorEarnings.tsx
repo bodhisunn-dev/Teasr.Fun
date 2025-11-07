@@ -1,7 +1,7 @@
 
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, TrendingUp, Users, Lock, Info } from "lucide-react";
+import { DollarSign, TrendingUp, Users, Info } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { motion } from "framer-motion";
 
@@ -27,6 +27,29 @@ export function InvestorEarnings({
   // Calculate aggregate stats
   const totalInvestments = investments.length;
   const totalUnlocks = investments.reduce((sum, inv) => sum + inv.totalUnlocks, 0);
+  
+  // Calculate overall progress (example: based on earnings milestones)
+  const earningsValue = parseFloat(totalEarnings);
+  const milestones = [10, 50, 100, 500, 1000]; // Example earning milestones in USD
+  let currentMilestone = milestones[0];
+  let nextMilestone = milestones[1];
+  
+  for (let i = 0; i < milestones.length - 1; i++) {
+    if (earningsValue >= milestones[i] && earningsValue < milestones[i + 1]) {
+      currentMilestone = milestones[i];
+      nextMilestone = milestones[i + 1];
+      break;
+    } else if (earningsValue >= milestones[milestones.length - 1]) {
+      currentMilestone = milestones[milestones.length - 2];
+      nextMilestone = milestones[milestones.length - 1];
+      break;
+    }
+  }
+  
+  const progressPercent = Math.min(
+    ((earningsValue - currentMilestone) / (nextMilestone - currentMilestone)) * 100,
+    100
+  );
 
   return (
     <div className={`space-y-6 ${className}`} data-testid="investor-earnings">
@@ -54,60 +77,30 @@ export function InvestorEarnings({
         </div>
       </Card>
 
-      {/* How It Works Card */}
+      {/* Single Progress Bar with Explanation */}
       <Card className="p-6 border-purple-500/20">
-        <div className="flex items-center gap-2 mb-4">
-          <Info className="w-5 h-5 text-purple-600" />
-          <h3 className="font-semibold">How Investor Earnings Work</h3>
-        </div>
-        
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            When you become an early investor in content, you earn a percentage of revenue from every subsequent unlock. Here's how it works:
-          </p>
-          
-          <div className="space-y-3">
-            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-              <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-sm font-bold text-purple-600">1</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Creator Sets Investor Limits</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Creators choose how many investors (1-100) and what % of revenue they share (e.g., 3%)
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-              <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-sm font-bold text-purple-600">2</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Secure Your Investor Spot</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Pay the buyout price before all investor slots are filled
-                </p>
-              </div>
-            </div>
-            
-            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
-              <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-sm font-bold text-purple-600">3</span>
-              </div>
-              <div>
-                <p className="text-sm font-medium">Earn Automatically</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Your share is distributed automatically from each unlock after platform fees (0.05 USDC)
-                </p>
-              </div>
-            </div>
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold">Earnings Progress</h3>
+            <span className="text-sm text-muted-foreground">
+              ${currentMilestone} → ${nextMilestone}
+            </span>
           </div>
-
-          <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
-            <p className="text-xs font-medium text-purple-600 dark:text-purple-400">
-              Example: If creator sets 33 investors at 3% revenue share, and someone unlocks for $10, you earn $0.09 (3% ÷ 33 investors of $9.95 after platform fee)
-            </p>
+          
+          <Progress value={progressPercent} className="h-2" />
+          
+          <div className="flex items-start gap-2 p-3 bg-purple-500/10 border-l-2 border-purple-500 rounded">
+            <Info className="w-4 h-4 text-purple-600 flex-shrink-0 mt-0.5" />
+            <div className="text-xs text-muted-foreground leading-relaxed">
+              <p className="font-semibold text-foreground mb-1">How Investor Earnings Work:</p>
+              <ul className="space-y-1 list-disc list-inside">
+                <li>Creators set max investors (1-100) and revenue share % per post</li>
+                <li>First buyers who choose "Investor Option" secure spots</li>
+                <li>Once all spots filled, your share is distributed from each new unlock</li>
+                <li>Platform fee: $0.05 USDC per transaction</li>
+                <li>Your earnings = (Revenue Share % ÷ Total Investors) × (Payment - Platform Fee)</li>
+              </ul>
+            </div>
           </div>
         </div>
       </Card>
@@ -141,10 +134,6 @@ export function InvestorEarnings({
                         <div className="flex items-center gap-1">
                           <Users className="w-3 h-3" />
                           {investment.totalUnlocks} unlocks
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Lock className="w-3 h-3" />
-                          Revenue share
                         </div>
                       </div>
                     </div>

@@ -1228,7 +1228,7 @@ export class DatabaseStorage implements IStorage {
         .select({ position: investors.position })
         .from(investors)
         .where(and(
-          eq( અuserId, userId),
+          eq(investors.userId, userId),
           eq(investors.postId, postId)
         ))
     );
