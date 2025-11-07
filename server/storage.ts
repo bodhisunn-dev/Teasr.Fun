@@ -9,7 +9,6 @@ import {
   viralNotifications,
   follows,
   notifications,
-  directMessages,
   referralCodes as referralCodesTable, // Added for referral system, aliased to avoid naming conflict
   referrals, // Added for referral system
   investors,
@@ -75,6 +74,7 @@ export interface IStorage {
   getUserByWallet(walletAddress: string): Promise<User | undefined>; // Added function signature
   getUserByUsername(username: string): Promise<User | undefined>; // Added function signature
   createUser(user: InsertUser): Promise<User>;
+  searchUsers(query: string): Promise<User[]>; // Added for user search
 
   // Posts
   getPost(id: string): Promise<Post | undefined>;
@@ -90,6 +90,7 @@ export interface IStorage {
   getUserRecentPayments(userId: string, limit?: number): Promise<any[]>; // Added user-specific method
   getRecentPayments(limit: number): Promise<any[]>;
   getTotalRevenue(): Promise<string>;
+  hasUserPaidForAnyContent(payerId: string, creatorId: string): Promise<boolean>; // Added for checking if user paid for any content from another user
 
   // Comments
   createComment(comment: InsertComment): Promise<Comment>;
@@ -150,6 +151,7 @@ export interface IStorage {
   updateInvestorEarnings(postId: string, earningAmount: string): Promise<void>;
   getInvestorCount(postId: string): Promise<number>;
   getUserInvestorPosition(userId: string, postId: string): Promise<number | null>;
+  // Investor dashboard is simplified to show overall performance rather than post-specific progress bars.
 
   // Pinned Posts Methods
   createPinnedPost(userId: string, postId: string): Promise<PinnedPost>;
@@ -166,14 +168,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByWalletAddress(walletAddress: string): Promise<User | undefined> {
-    return await withRetry(async () => {
-      const [user] = await db
+    return await withRetry(() => {
+      return db
         .select()
         .from(users)
         .where(eq(users.walletAddress, walletAddress))
         .limit(1);
-      return user;
-    });
+    }).then(res => res[0]);
   }
 
   // Alias for compatibility
@@ -182,11 +183,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return await withRetry(() =>
-      db.query.users.findFirst({
-        where: sql`LOWER(${users.username}) = LOWER(${username})`,
-      })
+    const [user] = await withRetry(() =>
+      db.select().from(users).where(eq(users.username, username.toLowerCase())).limit(1)
     );
+    return user || undefined;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
@@ -197,6 +197,15 @@ export class DatabaseStorage implements IStorage {
         .returning()
     );
     return user;
+  }
+
+  async searchUsers(query: string): Promise<User[]> {
+    const searchResults = await withRetry(() =>
+      db.select().from(users)
+        .where(sql`LOWER(${users.username}) LIKE ${`%${query.toLowerCase()}%`}`)
+        .limit(10)
+    );
+    return searchResults;
   }
 
   // Posts
@@ -348,7 +357,7 @@ export class DatabaseStorage implements IStorage {
     return payment;
   }
 
-  async hasUserPaid(userId: string, postId: string, paymentType: string): Promise<boolean> {
+  async hasUserPaid(userId: string, postId: string, paymentType: 'content' | 'comment'): Promise<boolean> {
     // Check if content is free
     const post = await this.getPost(postId);
     if (post?.isFree) {
@@ -366,11 +375,28 @@ export class DatabaseStorage implements IStorage {
             eq(payments.paymentType, paymentType)
           )
         )
+        .limit(1)
     );
 
     console.log(`hasUserPaid check - userId: ${userId}, postId: ${postId}, paymentType: ${paymentType}, found: ${!!payment}`);
     return !!payment;
   }
+
+  async hasUserPaidForAnyContent(payerId: string, creatorId: string): Promise<boolean> {
+    const [payment] = await withRetry(() =>
+      db.select()
+        .from(payments)
+        .innerJoin(posts, eq(payments.postId, posts.id))
+        .where(and(
+          eq(payments.userId, payerId),
+          eq(posts.creatorId, creatorId),
+          eq(payments.paymentType, 'content')
+        ))
+        .limit(1)
+    );
+    return !!payment;
+  }
+
 
   async getUserRecentPayments(userId: string, limit: number = 50): Promise<any[]> {
     return await withRetry(() =>
@@ -410,7 +436,7 @@ export class DatabaseStorage implements IStorage {
 
     // Import price conversion at runtime to avoid circular dependency
     const { getPriceInUSD } = await import('./services/priceConversion');
-    
+
     // Calculate total revenue in USD
     let totalUSD = 0;
     for (const payment of allPayments) {
@@ -1059,7 +1085,7 @@ export class DatabaseStorage implements IStorage {
 
     // Import price conversion at runtime to avoid circular dependency
     const { getPriceInUSD } = await import('./services/priceConversion');
-    
+
     // Calculate total revenue in USD
     let totalUSD = 0;
     for (const payment of postPayments) {
@@ -1086,7 +1112,7 @@ export class DatabaseStorage implements IStorage {
 
     // Import price conversion at runtime to avoid circular dependency
     const { getPriceInUSD } = await import('./services/priceConversion');
-    
+
     // Calculate total revenue in USD
     let totalUSD = 0;
     for (const payment of userPayments) {
@@ -1099,6 +1125,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Investor Methods
+  // The investor dashboard is simplified to show overall performance.
+  // The previous detailed progress bar logic per post is removed,
+  // and replaced with a summary of total earnings and investments.
   async createInvestor(investor: InsertInvestor): Promise<Investor> {
     const [newInvestor] = await withRetry(() =>
       db
@@ -1110,6 +1139,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getInvestorsByPost(postId: string): Promise<Investor[]> {
+    // This method is less relevant with the simplified dashboard.
+    // It might be used for historical data or specific admin features.
     return await withRetry(() =>
       db
         .select()
@@ -1140,29 +1171,32 @@ export class DatabaseStorage implements IStorage {
 
     return userInvestments.map(inv => {
       const totalUnlocks = Number(inv.unlockCount);
-      const unlocksAfterFirst10 = Math.max(0, totalUnlocks - 10);
-      
+      const unlocksAfterFirst10 = Math.max(0, totalUnlocks - 10); // Example logic: royalties only apply after first 10 unlocks
+
       return {
         postId: inv.investor.postId,
         postTitle: inv.post.title,
-        position: inv.investor.position,
+        position: inv.investor.position, // This might represent the order of investment or royalty percentage
         earningsGenerated: inv.investor.totalEarnings,
-        totalUnlocks: unlocksAfterFirst10,
+        totalUnlocks: unlocksAfterFirst10, // Simplified metric for dashboard
         investmentAmount: inv.investor.investmentAmount,
+        // Add creator royalty percentage if available in investor schema or post schema
       };
     });
   }
 
   async getUserInvestorDashboard(userId: string): Promise<InvestorDashboard> {
     const investments = await this.getInvestorsByUser(userId);
-    
+
     const totalEarnings = investments.reduce((sum, inv) => {
       return sum + parseFloat(inv.earningsGenerated);
     }, 0);
 
+    // Simplified dashboard: Total earnings and a list of investments with key metrics.
+    // Removed post-specific progress bars.
     return {
       totalEarnings: totalEarnings.toFixed(2),
-      investments,
+      investments, // This list contains simplified metrics per investment
     };
   }
 
@@ -1194,7 +1228,7 @@ export class DatabaseStorage implements IStorage {
         .select({ position: investors.position })
         .from(investors)
         .where(and(
-          eq(investors.userId, userId),
+          eq( અuserId, userId),
           eq(investors.postId, postId)
         ))
     );

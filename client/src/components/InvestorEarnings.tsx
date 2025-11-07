@@ -1,6 +1,8 @@
+
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, TrendingUp, Users, Lock } from "lucide-react";
+import { DollarSign, TrendingUp, Users, Lock, Info } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { motion } from "framer-motion";
 
 interface InvestorEarning {
@@ -22,6 +24,10 @@ export function InvestorEarnings({
   investments,
   className = ""
 }: InvestorEarningsProps) {
+  // Calculate aggregate stats
+  const totalInvestments = investments.length;
+  const totalUnlocks = investments.reduce((sum, inv) => sum + inv.totalUnlocks, 0);
+
   return (
     <div className={`space-y-6 ${className}`} data-testid="investor-earnings">
       {/* Total Earnings Card */}
@@ -29,7 +35,7 @@ export function InvestorEarnings({
         <div className="flex items-start justify-between">
           <div>
             <p className="text-sm text-muted-foreground font-medium mb-1">
-              Investor Earnings
+              Total Investor Earnings
             </p>
             <div className="flex items-center gap-2">
               <DollarSign className="w-6 h-6 text-purple-600" />
@@ -38,13 +44,71 @@ export function InvestorEarnings({
               </span>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              From {investments.length} {investments.length === 1 ? "investment" : "investments"}
+              From {totalInvestments} {totalInvestments === 1 ? "investment" : "investments"} • {totalUnlocks} total unlocks
             </p>
           </div>
           <Badge className="bg-gradient-to-r from-purple-600 to-pink-600 text-white">
             <TrendingUp className="w-3 h-3 mr-1" />
             Active Investor
           </Badge>
+        </div>
+      </Card>
+
+      {/* How It Works Card */}
+      <Card className="p-6 border-purple-500/20">
+        <div className="flex items-center gap-2 mb-4">
+          <Info className="w-5 h-5 text-purple-600" />
+          <h3 className="font-semibold">How Investor Earnings Work</h3>
+        </div>
+        
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            When you become an early investor in content, you earn a percentage of revenue from every subsequent unlock. Here's how it works:
+          </p>
+          
+          <div className="space-y-3">
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-sm font-bold text-purple-600">1</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium">Creator Sets Investor Limits</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Creators choose how many investors (1-100) and what % of revenue they share (e.g., 3%)
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-sm font-bold text-purple-600">2</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium">Secure Your Investor Spot</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Pay the buyout price before all investor slots are filled
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex items-start gap-3 p-3 bg-muted/50 rounded-lg">
+              <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-sm font-bold text-purple-600">3</span>
+              </div>
+              <div>
+                <p className="text-sm font-medium">Earn Automatically</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Your share is distributed automatically from each unlock after platform fees (0.05 USDC)
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-3 bg-purple-500/10 border border-purple-500/20 rounded-lg">
+            <p className="text-xs font-medium text-purple-600 dark:text-purple-400">
+              Example: If creator sets 33 investors at 3% revenue share, and someone unlocks for $10, you earn $0.09 (3% ÷ 33 investors of $9.95 after platform fee)
+            </p>
+          </div>
         </div>
       </Card>
 
