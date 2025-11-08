@@ -218,10 +218,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const relationships = await storage.getPaymentRelationshipsForUser(user.id);
-      console.log(`Payment relationships for user ${user.id}:`, {
-        patronsCount: relationships.patrons.length,
-        creatorsPaidCount: relationships.creatorsPaid.length,
-      });
       res.json(relationships);
     } catch (error: any) {
       console.error('Get payment relationships error:', error);
