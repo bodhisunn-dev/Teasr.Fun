@@ -44,13 +44,13 @@ export default function Messages() {
     queryFn: async () => {
       const authResponse = await apiRequest('POST', '/api/users/auth', { walletAddress: address });
       const authData = await authResponse.json() as UserType;
-      
+
       // Fetch full user profile to get profileImagePath
       const profileResponse = await fetch(`/api/users/${authData.username}`, {
         headers: { 'x-wallet-address': address || '' },
       });
       if (!profileResponse.ok) return authData;
-      
+
       return profileResponse.json() as Promise<UserType>;
     },
   });
@@ -277,10 +277,12 @@ export default function Messages() {
                       <>
                         {messages.map((msg) => {
                           const isMe = msg.senderId === currentUser?.id;
-                          const avatarUser = isMe ? currentUser : selectedUser;
-                          const avatarSrc = avatarUser?.profileImagePath || '';
-                          const avatarAlt = avatarUser?.username || '';
-                          
+                          // Determine which user's avatar to show for the message
+                          // If it's my message, show my avatar; otherwise, show the other user's (msg.sender)
+                          const messageUser = msg.senderId === currentUser?.id ? currentUser : msg.sender;
+                          const avatarSrc = messageUser?.profileImagePath || '';
+                          const avatarAlt = messageUser?.username || '';
+
                           return (
                             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                               <div className={`flex gap-2 max-w-[85%] sm:max-w-[75%] lg:max-w-md ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
