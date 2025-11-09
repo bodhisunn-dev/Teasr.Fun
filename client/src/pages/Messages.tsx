@@ -269,17 +269,16 @@ export default function Messages() {
                       <>
                         {messages.map((msg) => {
                           const isMe = msg.senderId === currentUser?.id;
+                          const avatar = isMe ? currentUser : selectedUser;
                           return (
                             <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
                               <div className={`flex gap-2 max-w-[85%] sm:max-w-[75%] lg:max-w-md ${isMe ? 'flex-row-reverse' : 'flex-row'}`}>
-                                {!isMe && (
-                                  <Avatar className="w-7 h-7 sm:w-8 sm:h-8">
-                                    <AvatarImage src={selectedUser?.profileImagePath || ''} alt={selectedUser?.username} />
-                                    <AvatarFallback>
-                                      <User className="w-3 h-3 sm:w-4 sm:h-4" />
-                                    </AvatarFallback>
-                                  </Avatar>
-                                )}
+                                <Avatar className="w-7 h-7 sm:w-8 sm:h-8">
+                                  <AvatarImage src={avatar?.profileImagePath || ''} alt={avatar?.username} />
+                                  <AvatarFallback>
+                                    <User className="w-3 h-3 sm:w-4 sm:h-4" />
+                                  </AvatarFallback>
+                                </Avatar>
                                 <div
                                   className={`rounded-2xl px-3 py-2 sm:px-4 sm:py-2.5 text-sm shadow-sm ${
                                     isMe
