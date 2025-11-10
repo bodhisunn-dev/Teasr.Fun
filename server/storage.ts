@@ -1144,8 +1144,35 @@ export class DatabaseStorage implements IStorage {
     // Calculate total revenue in USD
     let totalUSD = 0;
     for (const payment of postPayments) {
+      // Normalize cryptocurrency symbol (uppercase, trim whitespace)
+      const normalizedCrypto = payment.cryptocurrency?.toUpperCase().trim();
+      
+      // Parse amount and validate it's a valid number
       const amountInCrypto = parseFloat(payment.amount);
-      const cryptoPrice = getPriceInUSD(payment.cryptocurrency as any);
+      
+      // Skip invalid records
+      if (!normalizedCrypto || !Number.isFinite(amountInCrypto)) {
+        console.warn('Skipping malformed payment:', { 
+          postId, 
+          amount: payment.amount, 
+          crypto: payment.cryptocurrency 
+        });
+        continue;
+      }
+      
+      // Get crypto price, default to 0 if unsupported
+      let cryptoPrice = 0;
+      try {
+        cryptoPrice = getPriceInUSD(normalizedCrypto as any);
+        if (!Number.isFinite(cryptoPrice)) {
+          console.warn('Unsupported cryptocurrency:', normalizedCrypto);
+          cryptoPrice = 0;
+        }
+      } catch (err) {
+        console.warn('Error getting price for:', normalizedCrypto);
+        cryptoPrice = 0;
+      }
+      
       totalUSD += amountInCrypto * cryptoPrice;
     }
 
@@ -1171,8 +1198,35 @@ export class DatabaseStorage implements IStorage {
     // Calculate total revenue in USD
     let totalUSD = 0;
     for (const payment of userPayments) {
+      // Normalize cryptocurrency symbol (uppercase, trim whitespace)
+      const normalizedCrypto = payment.cryptocurrency?.toUpperCase().trim();
+      
+      // Parse amount and validate it's a valid number
       const amountInCrypto = parseFloat(payment.amount);
-      const cryptoPrice = getPriceInUSD(payment.cryptocurrency as any);
+      
+      // Skip invalid records
+      if (!normalizedCrypto || !Number.isFinite(amountInCrypto)) {
+        console.warn('Skipping malformed payment for user:', { 
+          userId, 
+          amount: payment.amount, 
+          crypto: payment.cryptocurrency 
+        });
+        continue;
+      }
+      
+      // Get crypto price, default to 0 if unsupported
+      let cryptoPrice = 0;
+      try {
+        cryptoPrice = getPriceInUSD(normalizedCrypto as any);
+        if (!Number.isFinite(cryptoPrice)) {
+          console.warn('Unsupported cryptocurrency:', normalizedCrypto);
+          cryptoPrice = 0;
+        }
+      } catch (err) {
+        console.warn('Error getting price for:', normalizedCrypto);
+        cryptoPrice = 0;
+      }
+      
       totalUSD += amountInCrypto * cryptoPrice;
     }
 
