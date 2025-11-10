@@ -13,13 +13,27 @@ import { Skeleton } from '@/components/ui/skeleton';
 type LeaderboardType = 'creators' | 'posts';
 
 function ViralPostCard({ post }: { post: PostWithCreator }) {
-  const [revenue, setRevenue] = useState<string>('0');
+  const [revenue, setRevenue] = useState<string>('0.00');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`/api/posts/${post.id}/revenue`)
-      .then(res => res.json())
-      .then(data => setRevenue(data.revenue))
-      .catch(err => console.error('Error fetching revenue:', err));
+    const fetchRevenue = async () => {
+      try {
+        const response = await fetch(`/api/posts/${post.id}/revenue`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch revenue');
+        }
+        const data = await response.json();
+        setRevenue(data.revenue || '0.00');
+      } catch (err) {
+        console.error('Error fetching revenue for post', post.id, err);
+        setRevenue('0.00');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchRevenue();
   }, [post.id]);
 
   return (
@@ -39,7 +53,7 @@ function ViralPostCard({ post }: { post: PostWithCreator }) {
         <div className="absolute bottom-2 left-2">
           <Badge className="bg-green-600 text-white">
             <DollarSign className="w-3 h-3 mr-1" />
-            ${parseFloat(revenue).toFixed(2)}
+            {loading ? '...' : `$${parseFloat(revenue).toFixed(2)}`}
           </Badge>
         </div>
       </div>

@@ -1137,7 +1137,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPostRevenue(postId: string): Promise<string> {
-    // Get all payments for this post
+    // Get all payments for this post (content payments only)
     const postPayments = await withRetry(() =>
       db
         .select({
@@ -1145,8 +1145,13 @@ export class DatabaseStorage implements IStorage {
           cryptocurrency: payments.cryptocurrency,
         })
         .from(payments)
-        .where(eq(payments.postId, postId))
+        .where(and(
+          eq(payments.postId, postId),
+          eq(payments.paymentType, 'content')
+        ))
     );
+
+    console.log(`[getPostRevenue] Post ${postId}: Found ${postPayments.length} payments`);
 
     // Import price conversion at runtime to avoid circular dependency
     const { getPriceInUSD } = await import('./services/priceConversion');
@@ -1186,6 +1191,7 @@ export class DatabaseStorage implements IStorage {
       totalUSD += amountInCrypto * cryptoPrice;
     }
 
+    console.log(`[getPostRevenue] Post ${postId}: Total revenue $${totalUSD.toFixed(2)}`);
     return totalUSD.toFixed(2);
   }
 
