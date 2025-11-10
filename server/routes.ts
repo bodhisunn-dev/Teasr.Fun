@@ -96,18 +96,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get or create user by wallet address
   app.post('/api/users/auth', async (req, res) => {
     try {
+      console.log('[AUTH] Request received:', { walletAddress: req.body.walletAddress?.substring(0, 10), username: req.body.username });
       const { walletAddress, username, referralCode } = req.body;
 
       if (!walletAddress || !username) {
+        console.error('[AUTH] Missing required fields');
         return res.status(400).json({ error: 'Wallet address and username required' });
       }
 
+      console.log('[AUTH] Checking if user exists...');
       // Check if user exists
       let user = await storage.getUserByWalletAddress(walletAddress);
+      console.log('[AUTH] User lookup result:', user ? 'FOUND' : 'NOT FOUND');
       let isNewUser = false;
 
       if (!user) {
         isNewUser = true;
+        console.log('[AUTH] Creating new user...');
         try {
           // Create new user with unique username
           const baseUsername = username;
@@ -116,8 +121,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           while (!user && attempt < 10) {
             try {
+              console.log('[AUTH] Attempting to create user with username:', uniqueUsername);
               user = await storage.createUser({ walletAddress, username: uniqueUsername });
+              console.log('[AUTH] User created successfully:', user.id);
             } catch (createError: any) {
+              console.error('[AUTH] Create user error:', createError.message, createError.code);
               if (createError.code === '23505' && createError.constraint === 'users_username_unique') {
                 // Username exists, try with suffix
                 attempt++;
@@ -165,14 +173,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
         } catch (createError: any) {
-          console.error('User creation error:', createError);
+          console.error('[AUTH] FATAL - User creation error:', createError.message, createError.stack);
           throw createError;
         }
       }
 
+      console.log('[AUTH] Success - returning user:', user.id);
       res.json(user);
     } catch (error: any) {
-      console.error('Auth error:', error);
+      console.error('[AUTH] FINAL ERROR:', error.message, error.stack);
       res.status(500).json({ error: error.message });
     }
   });

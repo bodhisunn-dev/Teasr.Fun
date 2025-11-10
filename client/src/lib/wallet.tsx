@@ -186,6 +186,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         throw new Error(errorData.message || 'Authentication failed');
       }
 
+      await authResponse.json();
+
       toast({
         title: 'Wallet connected',
         description: `Connected with ${walletType} as ${address.substring(0, 6)}...${address.substring(38)}`,
