@@ -14,28 +14,32 @@ export function ViralPostBanner() {
 
   if (viralPosts.length === 0) return null;
 
-  // Duplicate posts for seamless infinite scroll
-  const duplicatedPosts = [...viralPosts, ...viralPosts, ...viralPosts];
+  // Create enough duplicates for seamless infinite scroll
+  const duplicatedPosts = [...viralPosts, ...viralPosts, ...viralPosts, ...viralPosts];
+  
+  // Calculate total width for animation (approximate 250px per card)
+  const cardWidth = 250;
+  const totalWidth = viralPosts.length * cardWidth;
 
   return (
     <div className="w-full bg-gradient-to-r from-orange-500/10 via-red-500/10 to-pink-500/10 border-b border-orange-500/20 overflow-hidden py-2">
       <motion.div
         className="flex gap-6"
         animate={{
-          x: [0, -100 * viralPosts.length],
+          x: [-totalWidth, 0],
         }}
         transition={{
           x: {
             repeat: Infinity,
             repeatType: "loop",
-            duration: viralPosts.length * 8,
+            duration: viralPosts.length * 5,
             ease: "linear",
           },
         }}
       >
         {duplicatedPosts.map((post, index) => (
           <Link key={`${post.id}-${index}`} href={`/`}>
-            <div className="flex items-center gap-2 px-4 py-1 bg-background/50 backdrop-blur-sm rounded-full border border-orange-500/30 hover:border-orange-500/60 transition-colors cursor-pointer whitespace-nowrap">
+            <div className="flex items-center gap-2 px-4 py-1 bg-background/50 backdrop-blur-sm rounded-full border border-orange-500/30 hover:border-orange-500/60 transition-colors cursor-pointer whitespace-nowrap min-w-max">
               <TrendingUp className="w-4 h-4 text-orange-500" />
               <span className="text-sm font-medium">
                 {post.title}

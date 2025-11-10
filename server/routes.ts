@@ -1772,7 +1772,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Serve uploaded files
   const express = await import('express');
-  const USE_OBJECT_STORAGE = false; // Use local filesystem
+  const USE_OBJECT_STORAGE = process.env.REPL_DEPLOYMENT === '1';
   
   if (USE_OBJECT_STORAGE) {
     // Serve thumbnails from Object Storage
