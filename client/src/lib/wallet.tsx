@@ -5,6 +5,16 @@ import { useToast } from '@/hooks/use-toast';
 // Prevent Buffer polyfill issues in browser
 if (typeof window !== 'undefined') {
   (window as any).Buffer = undefined;
+  (window as any).global = window;
+  
+  // Additional safeguard for mobile wallet apps
+  try {
+    if ((window as any).ethereum?.isPhantom) {
+      (window as any).process = undefined;
+    }
+  } catch (e) {
+    console.warn('Buffer polyfill prevention:', e);
+  }
 }
 
 type WalletType = 'metamask' | 'coinbase' | 'phantom' | null;
@@ -92,12 +102,29 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     const win = window as any;
 
     if (type === 'phantom') {
-      if (win.phantom?.ethereum) return win.phantom.ethereum;
-      if (win.solana?.isPhantom) return win.solana;
+      // Check for Phantom's Ethereum provider first (works for both desktop and mobile)
+      if (win.phantom?.ethereum) {
+        return win.phantom.ethereum;
+      }
+      
+      // Check in providers array (multi-wallet scenario)
       if (win.ethereum?.providers) {
-        const phantom = win.ethereum.providers.find((p: any) => p.isPhantom);
+        const phantom = win.ethereum.providers.find((p: any) => 
+          p.isPhantom && !p.isCoinbaseWallet && !p.isMetaMask
+        );
         if (phantom) return phantom;
       }
+      
+      // Check if default ethereum is Phantom (mobile deep link scenario)
+      if (win.ethereum?.isPhantom && !win.ethereum?.isCoinbaseWallet && !win.ethereum?.isMetaMask) {
+        return win.ethereum;
+      }
+      
+      // Fallback to Solana provider (for Solana-only Phantom connections)
+      if (win.solana?.isPhantom) {
+        return win.solana;
+      }
+      
       return null;
     }
 
@@ -153,8 +180,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
     setIsConnecting(true);
     try {
-      const ethersProvider = new ethers.providers.Web3Provider(provider);
-      await ethersProvider.send('eth_requestAccounts', []);
+      // Special handling for Phantom mobile
+      if (walletType === 'phantom' && provider.isPhantom) {
+        // Ensure provider is ready
+        if (provider.on) {
+          provider.removeAllListeners();
+        }
+      }
+      
+      const ethersProvider = new ethers.providers.Web3Provider(provider, 'any');
+      
+      // Request accounts with timeout for mobile
+      const accountsPromise = ethersProvider.send('eth_requestAccounts', []);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Connection timeout')), 30000)
+      );
+      
+      await Promise.race([accountsPromise, timeoutPromise]);
+      
       const signer = ethersProvider.getSigner();
       const address = await signer.getAddress();
 
@@ -194,9 +237,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       });
     } catch (error: any) {
       console.error('Wallet connection error:', error);
+      
+      let errorMessage = error.message || 'Please try again';
+      
+      // Provide specific guidance for common mobile wallet issues
+      if (walletType === 'phantom') {
+        if (error.message?.includes('timeout') || error.message?.includes('Connection')) {
+          errorMessage = 'Connection timeout. Please ensure Phantom app is updated and try again.';
+        } else if (error.message?.includes('User rejected')) {
+          errorMessage = 'Connection rejected. Please approve in Phantom app.';
+        } else if (error.message?.includes('Buffer')) {
+          errorMessage = 'Compatibility issue detected. Please update Phantom app or try desktop.';
+        }
+      }
+      
       toast({
         title: 'Connection failed',
-        description: error.message || 'Please try again',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
