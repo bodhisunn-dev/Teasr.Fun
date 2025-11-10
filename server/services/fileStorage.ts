@@ -7,8 +7,8 @@ import { saveToObjectStorage, getFromObjectStorage, existsInObjectStorage } from
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 const THUMBNAIL_DIR = path.join(UPLOAD_DIR, 'thumbnails');
 
-// Use Object Storage for production, local filesystem for development
-const USE_OBJECT_STORAGE = process.env.NODE_ENV === 'production' || process.env.USE_OBJECT_STORAGE === 'true';
+// Use local filesystem storage (Object Storage requires bucket configuration)
+const USE_OBJECT_STORAGE = false;
 
 // Ensure directories exist
 async function ensureDirs() {
