@@ -532,10 +532,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         req.headers['x-wallet-address'] = walletFromQuery;
       }
       const user = await getCurrentUser(req);
-      const postId = parseInt(req.params.id);
+      const postId = req.params.id; // Keep as string UUID
       const post = await storage.getPost(postId);
 
       if (!post) {
+        console.error(`[MEDIA] Post not found: ${postId}`);
         return res.status(404).json({ error: 'Post not found' });
       }
 
@@ -550,17 +551,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      console.log(`Media request for post ${postId}: userId=${user?.id}, isCreator=${isCreator}, hasPaid=${hasPaid}, isFree=${post.isFree}`);
+      console.log(`[MEDIA] Request for post ${postId}: userId=${user?.id}, isCreator=${isCreator}, hasPaid=${hasPaid}, isFree=${post.isFree}`);
 
       // If not paid and not creator and not free, serve blurred thumbnail
       if (!post.isFree && !isCreator && !hasPaid) {
-        console.log('User has not paid, serving blurred thumbnail');
+        console.log('[MEDIA] User has not paid, serving blurred thumbnail');
         return res.redirect(`/api/thumbnails/${post.blurredThumbnailPath.split('/').pop()}`);
       }
 
       // User has access - decrypt and serve actual content
       try {
-        console.log('User has access, decrypting and serving content');
+        console.log(`[MEDIA] User has access, decrypting: ${post.encryptedMediaPath}`);
         const encryptedBuffer = await readEncryptedFile(post.encryptedMediaPath);
         const contentKey = decryptContentKey({
           encryptedKey: post.encryptedKey,
@@ -575,13 +576,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.set('Content-Type', mimeType);
         res.set('Cache-Control', 'private, max-age=3600');
         res.set('Content-Length', decryptedBuffer.length.toString());
+        console.log(`[MEDIA] Successfully decrypted and serving content, size: ${decryptedBuffer.length} bytes`);
         res.send(decryptedBuffer);
       } catch (decryptError) {
-        console.error('Decryption error:', decryptError);
+        console.error('[MEDIA] Decryption error:', decryptError);
         return res.redirect(`/api/thumbnails/${post.blurredThumbnailPath.split('/').pop()}`);
       }
     } catch (error: any) {
-      console.error('Get media error:', error);
+      console.error('[MEDIA] Error:', error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -688,12 +690,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log(`Calculated price: ${actualPrice} (isBuyout: ${isBuyout}, investorCount: ${investorCount}/${maxInvestorSlots})`);
 
-      // Create payment record
+      // Create payment record - use server-calculated price, not client-supplied amount
       console.log(`[PAYMENT] Creating payment record...`);
       console.log(`[PAYMENT] Payment data:`, {
         userId: user.id,
         postId: post.id,
-        amount: amount.toString(),
+        amount: actualPrice.toString(), // Use server-calculated price for testnet
         cryptocurrency: cryptocurrency || 'USDC',
         network: selectedNetwork,
         isBuyout: isBuyout || false,
@@ -704,7 +706,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const paymentRecord = await storage.createPayment({
         userId: user.id,
         postId: post.id,
-        amount: amount.toString(),
+        amount: actualPrice.toString(), // Use server-calculated price for testnet
         cryptocurrency: cryptocurrency || 'USDC',
         network: selectedNetwork,
         isBuyout: isBuyout || false,
@@ -1801,45 +1803,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Serve post media from Object Storage
-    app.get('/api/posts/:id/media', async (req, res) => {
-      try {
-        const postId = parseInt(req.params.id);
-        const walletAddress = req.headers['x-wallet-address'] as string || req.query.wallet as string;
-
-        const post = await storage.getPost(postId);
-        if (!post) {
-          console.error(`Post ${postId} not found`);
-          return res.status(404).json({ error: 'Post not found' });
-        }
-
-        // Check if user has paid for this content or it's free
-        const hasAccess = post.isFree || (walletAddress && await storage.hasUserPaidForPost(walletAddress, postId));
-
-        if (!hasAccess) {
-          console.log(`Access denied for post ${postId}, wallet: ${walletAddress}`);
-          return res.status(403).json({ error: 'Payment required' });
-        }
-
-        try {
-          // Decrypt and serve the file
-          const encryptedBuffer = await readEncryptedFile(post.encryptedMediaPath);
-          const decryptedBuffer = decryptBuffer(encryptedBuffer, post.encryptedKey, post.iv, post.authTag);
-
-          res.set('Content-Type', post.mediaType === 'image' ? 'image/jpeg' : 'video/mp4'); // Adjust mime type as needed
-          res.set('Cache-Control', 'private, max-age=3600');
-          res.set('Access-Control-Allow-Origin', '*');
-          res.set('Content-Length', decryptedBuffer.length.toString());
-          res.send(decryptedBuffer);
-        } catch (fileError) {
-          console.error(`Error reading or decrypting file for post ${postId}:`, fileError);
-          return res.status(500).json({ error: 'File not found or corrupted' });
-        }
-      } catch (error) {
-        console.error('Error serving media:', error);
-        res.status(500).json({ error: 'Failed to serve media' });
-      }
-    });
+    // Note: /api/posts/:id/media endpoint is defined earlier in the file (line ~530)
+    // and works for both Object Storage and local filesystem
   } else {
     // Serve from local filesystem in development
     app.use('/uploads/thumbnails', express.default.static(path.join(process.cwd(), 'uploads', 'thumbnails')));
@@ -1862,45 +1827,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
 
-    // Serve post media from local filesystem
-    app.get('/api/posts/:id/media', async (req, res) => {
-      try {
-        const postId = parseInt(req.params.id);
-        const walletAddress = req.headers['x-wallet-address'] as string || req.query.wallet as string;
-
-        const post = await storage.getPost(postId);
-        if (!post) {
-          console.error(`Post ${postId} not found`);
-          return res.status(404).json({ error: 'Post not found' });
-        }
-
-        // Check if user has paid for this content or it's free
-        const hasAccess = post.isFree || (walletAddress && await storage.hasUserPaidForPost(walletAddress, postId));
-
-        if (!hasAccess) {
-          console.log(`Access denied for post ${postId}, wallet: ${walletAddress}`);
-          return res.status(403).json({ error: 'Payment required' });
-        }
-
-        try {
-          // Decrypt and serve the file
-          const encryptedBuffer = await readEncryptedFile(post.encryptedMediaPath);
-          const decryptedBuffer = decryptBuffer(encryptedBuffer, post.encryptedKey, post.iv, post.authTag);
-
-          res.set('Content-Type', post.mediaType === 'image' ? 'image/jpeg' : 'video/mp4'); // Adjust mime type as needed
-          res.set('Cache-Control', 'private, max-age=3600');
-          res.set('Access-Control-Allow-Origin', '*');
-          res.set('Content-Length', decryptedBuffer.length.toString());
-          res.send(decryptedBuffer);
-        } catch (fileError) {
-          console.error(`Error reading or decrypting file for post ${postId}:`, fileError);
-          return res.status(500).json({ error: 'File not found or corrupted' });
-        }
-      } catch (error) {
-        console.error('Error serving media:', error);
-        res.status(500).json({ error: 'Failed to serve media' });
-      }
-    });
+    // Note: /api/posts/:id/media endpoint is defined earlier in the file (line ~530)
+    // and works for both Object Storage and local filesystem
   }
 
   // Serve blurred thumbnails (public access)
