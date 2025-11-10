@@ -1846,7 +1846,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       } catch (storageError) {
         // Fallback to local filesystem (development)
-        const filepath = path.join(process.cwd(), 'uploads', filename);
+        const filepath = path.join(process.cwd(), 'uploads', 'thumbnails', filename);
 
         if (!existsSync(filepath)) {
           console.error(`Thumbnail not found: ${filename}`);
