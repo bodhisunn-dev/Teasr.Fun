@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import { apiRequest } from '@/lib/queryClient';
 import { PostCard } from '@/components/PostCard';
 import { Navbar } from '@/components/Navbar';
-import { useWebSocket } from '@/lib/useWebSocket';
+import { useWebSocketMessage } from '@/lib/WebSocketContext';
 import { ReferralDashboard } from '@/components/ReferralDashboard';
 import { InvestorEarnings } from "@/components/InvestorEarnings";
 import { GridToggle } from "@/components/GridToggle";
@@ -30,21 +30,48 @@ function RevenueDisplay({ userId, walletAddress }: { userId: string; walletAddre
 
   useEffect(() => {
     const fetchRevenue = () => {
-      fetch(`/api/users/${userId}/revenue`)
-        .then(res => res.json())
-        .then(data => setRevenue(data.revenue))
+      // Force cache bypass with timestamp and no-cache headers
+      fetch(`/api/users/${userId}/revenue?nocache=${Date.now()}`, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { 
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      })
+        .then(res => {
+          if (!res.ok) throw new Error('Failed to fetch revenue');
+          return res.json();
+        })
+        .then(data => {
+          const newRevenue = data.revenue || '0';
+          console.log(`Revenue update for user ${userId}: $${newRevenue}`);
+          setRevenue(newRevenue);
+        })
         .catch(err => console.error('Error fetching revenue:', err));
     };
 
     const fetchInvestorEarnings = () => {
       if (!walletAddress) return;
       
-      fetch('/api/investors/dashboard', {
-        headers: { 'x-wallet-address': walletAddress },
+      fetch(`/api/investors/dashboard?nocache=${Date.now()}`, {
+        method: 'GET',
+        cache: 'no-store',
+        headers: { 
+          'x-wallet-address': walletAddress,
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        },
       })
-        .then(res => res.json())
+        .then(res => {
+          if (!res.ok) throw new Error('Failed to fetch investor earnings');
+          return res.json();
+        })
         .then(data => {
           if (data.totalEarnings) {
+            console.log(`Investor earnings update for user ${userId}: $${data.totalEarnings}`);
             setInvestorEarnings(data.totalEarnings);
           }
         })
@@ -54,11 +81,11 @@ function RevenueDisplay({ userId, walletAddress }: { userId: string; walletAddre
     fetchRevenue();
     fetchInvestorEarnings();
     
-    // Update every 10 seconds for real-time updates
+    // Update every 3 seconds for real-time updates
     const interval = setInterval(() => {
       fetchRevenue();
       fetchInvestorEarnings();
-    }, 10000);
+    }, 3000);
     
     return () => clearInterval(interval);
   }, [userId, walletAddress]);
@@ -108,7 +135,7 @@ export default function Profile() {
   const { data: investorData, refetch: refetchInvestorData } = useInvestorDashboard(address);
 
   // Refresh investor data when WebSocket receives updates
-  useWebSocket((message) => {
+  useWebSocketMessage((message) => {
     if (message.type === 'buyoutUpdate' && message.payload?.investorEarnings) {
       refetchInvestorData();
     }
@@ -178,7 +205,7 @@ export default function Profile() {
   }) || [];
 
   // WebSocket for live updates
-  useWebSocket((message) => {
+  useWebSocketMessage((message) => {
     if (message.type === 'viewUpdate' && message.payload) {
       queryClient.setQueryData(['/api/posts', address], (oldPosts: PostWithCreator[] | undefined) => {
         if (!oldPosts) return oldPosts;
